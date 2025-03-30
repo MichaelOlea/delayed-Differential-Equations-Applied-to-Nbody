@@ -36,7 +36,7 @@ class NBodySimulation:
     def set_initial_conditions(self, masses, positions, velocities):
         pass
 
-# small test to make sure all the arrays are in proper order
+'''# small test to make sure all the arrays are in proper order
 test_input = np.array([
     (1.0, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
     (2.0, [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]),
@@ -56,3 +56,4 @@ for i in range(num_bodies):
     print("Body mass:", sim.bodies[i]['mass'])
     print("Body position:", sim.bodies[i]['position'])
     print("Body velocity:", sim.bodies[i]['velocity'])
+'''
