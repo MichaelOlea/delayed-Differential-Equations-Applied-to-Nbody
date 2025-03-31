@@ -1,5 +1,8 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from mpl_toolkits.mplot3d.art3d import Line3D
 
 class NBodySimulation:
 
@@ -98,7 +101,7 @@ class NBodySimulation:
     
     def euler(self):
         """
-        performs one integratiuon step using Eulers method
+        performs one integration step using Eulers method
 
         Updates each body's velocity and position based on the current
         acceleration and time step.        
@@ -122,13 +125,13 @@ class NBodySimulation:
         if self.integrator == "euler":
             self.euler()
         else:
-            raise ValueError(f"uknown integrator: {self.integrator}")
+            raise ValueError(f"unknown integrator: {self.integrator}")
         
     def run(self, frames):
         """
-        Run the simultions for a given number of frames
+        Run the simulations for a given number of frames
 
-        Paramters
+        Parameters
         ---------
         frames: intger
             Number of frames (time steps) to run simultion 
@@ -189,6 +192,44 @@ class NBodySimulation:
 sim = NBodySimulation.load_data("data1.csv", dt=0.01, integrator='euler')
 
 # Run simulation
-position_history = sim.run(frames=10)
+position_history = sim.run(frames=300)
 
-print(position_history)
+# setup plot
+fig = plt.figure()
+ax = fig.add_subplot(111, projection = '3d')
+ax.set_box_aspect([1, 1, 1])
+
+# setup colors
+num_bodies = position_history.shape[1]
+colors = ['red', 'green', 'blue', 'purple', 'orange', 'pink', 'cyan', 'magenta', 'lime', 'teal']
+colors = colors * ((num_bodies + len(colors) - 1) // len(colors))  # Repeat if not enough colors
+
+# Creat scatter points and tails
+points = [ax.plot([], [], [], 'o', color = colors[i])[0] for i in range(num_bodies)]
+tails = [Line3D([], [], [], color = colors[i]) for i in range(num_bodies)]
+for tail in tails:
+    ax.add_line(tail)
+
+# Animation update functions
+def update(frame):
+    current_position = position_history[frame]
+    center_mass = current_position.mean(axis = 0)
+
+    # Autoscale view
+    max_distance = np.max(np.linalg.norm(current_position - center_mass, axis = 1))
+    ax.set_xlim(center_mass[0] - max_distance, center_mass[0] + max_distance)
+    ax.set_ylim(center_mass[1] - max_distance, center_mass[1] + max_distance)
+    ax.set_zlim(center_mass[2] - max_distance, center_mass[2] + max_distance)
+
+    for i in range(num_bodies):
+        points[i].set_data(current_position[i, 0], current_position[i, 1])
+        points[i].set_3d_properties(current_position[i, 2])
+        tails[i].set_data(position_history[:frame, i, 0], position_history[:frame, i, 1])
+        tails[i].set_3d_properties(position_history[:frame, i, 2])
+
+    return points + tails
+
+
+# Run animation
+anim = FuncAnimation(fig, update, frames=len(position_history), interval=10)
+plt.show()
