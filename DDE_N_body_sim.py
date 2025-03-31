@@ -1,30 +1,43 @@
-import numpy as np 
+import numpy as np
+import pandas as pd
 
 class NBodySimulation:
 
-    def __init__(self, num_bodies, G = 1 , softening = 0.1, dt = 0.1):
+    def __init__(self, num_bodies, G = 1 , softening = 0.1, dt = 0.1, integrator="euler"):
         """
-        Initializes the N-body simulation.
+        Initialize the N-body simulation.
 
-        parameters:
-        num_bodies: int, the number of bodies in the simultion 
-        G: float, Gravitaitonal constant
-        softening: float, Softening parameter to prevent numerical errors
-        dt: float, stands for delta time
+        Parameters
+        ----------
+        num_bodies : int
+        Number of bodies in the simulation.
+        G : float, optional
+        Gravitational constant. Default is 1.
+        softening : float, optional
+        Softening parameter to avoid division by zero at short distances. Default is 0.1.
+        dt : float, optional
+        Time step (delta t) for integration. Default is 0.1.
+        integrator : str, optional
+        Integration method to use (e.g., "euler", "rk4"). Default is "euler".
         """
+
+        # Store simulation parameters
         self.num_bodies = num_bodies
         self.G = G
         self.softening = softening
         self.dt = dt
+        self.integrator = integrator.lower() # covert to lower case
+
     
-        # Define structured arrays
+        # Define the structured data tpye for each body
+        # Each body has mass and a 3D vector for position and velocity
         self.body_dtype = np.dtype([
             ('mass', float),
             ('position', float, (3,)),
             ('velocity', float, (3,))
         ])
 
-        # Define array for bodies
+        # Initialize structured array to hold all bodies 
         self.bodies = np.zeros(num_bodies, dtype=self.body_dtype)
 
         # seperate the arrays into mass, position, velocity and acceleration
@@ -34,26 +47,148 @@ class NBodySimulation:
         self.accelerations = np.zeros((num_bodies, 3))
 
     def set_initial_conditions(self, masses, positions, velocities):
-        pass
+        """
+        Set initial conditions for simulation
 
-'''# small test to make sure all the arrays are in proper order
-test_input = np.array([
-    (1.0, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
-    (2.0, [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]),
-    (3.0, [0.0, 1.0, 0.0], [0.0, 0.0, 1.0])
-], dtype=[
-    ('mass', float),
-    ('position', float, (3,)),
-    ('velocity', float, (3,))
-])
+        parameters
+        ----------
+        masses: np.ndarray, shape (n,)
+            array of masses for each body
+        positions: np.ndarray, shape (n,)
+            initial 3D positions of each body
+        velocities: np.ndarray, shape (n,)
+            initial 3D velocities of each body
+        """
 
-num_bodies = 3
-sim = NBodySimulation(num_bodies)
-sim.bodies = test_input
+        # loop through each body and assign mass, posittion and velocity
+        for  i in range(self.num_bodies):
+            self.bodies[i]['mass'] = masses[i]
+            self.bodies[i]['position'] = positions[i]
+            self.bodies[i]['velocity'] = velocities[i]
 
-# Print to confirm is correct
-for i in range(num_bodies):
-    print("Body mass:", sim.bodies[i]['mass'])
-    print("Body position:", sim.bodies[i]['position'])
-    print("Body velocity:", sim.bodies[i]['velocity'])
-'''
+        # store data in arrays
+        self.masses[:] = masses
+        self.positions[:] = positions
+        self.velocities[:] = velocities
+
+    def calculate_acceleration(self):
+        """
+        Compute the gravitational acceleration on each body due to all other bodies
+
+        Using Newtons law of universal gravitions with softening.
+
+        Returns
+        -------
+        np. ndarray
+            shape: (num_bodies, 3) 3D accelertaion vecotrs of bodies 
+        """
+        self.accelerations.fill(0.0) # reset fill with zeros
+        
+        for i in range(self.num_bodies):
+            for j in range(self.num_bodies):
+                if i != j: # skip since body can not act on itself
+                    vec = self.positions[j] - self.positions[i] # position vector
+                    dist_sqr = np.sum(vec**2) + self.softening**2 # distance squared
+                    inv_dist_cube = 1.0 / (dist_sqr * np.sqrt(dist_sqr)) # inverse distacne cubed aka 1/r^3
+
+                    acc = self.G * self.masses[j] * vec * inv_dist_cube # acc = G*M/r^3
+                    self.accelerations[i] += acc
+
+        return self.accelerations
+    
+    def euler(self):
+        """
+        performs one integratiuon step using Eulers method
+
+        Updates each body's velocity and position based on the current
+        acceleration and time step.        
+        """
+
+        # update velocity aka v(t+dt) = v(t) + a(t) * dt
+        self.velocities += self.accelerations * self.dt
+        # update position aka x(t+dt) = x(t) + v(t) * dt
+        self.positions += self.velocities * self.dt
+
+        # update values
+        for i in range(self.num_bodies):
+            self.bodies[i]['position'] = self.positions[i]
+            self.bodies[i]['velocity'] = self.velocities[i]
+    
+    def choose_integrator(self):
+        """
+        A general function that let you choose which integrator to apply (will adee more integrators later).
+        """
+        self.calculate_acceleration()
+        if self.integrator == "euler":
+            self.euler()
+        else:
+            raise ValueError(f"uknown integrator: {self.integrator}")
+        
+    def run(self, frames):
+        """
+        Run the simultions for a given number of frames
+
+        Paramters
+        ---------
+        frames: intger
+            Number of frames (time steps) to run simultion 
+
+        Returns
+        -------
+        np.ndarray
+            Position history with shape (frames, num_bodies, 3),
+            the positions of all bodies over time.
+        """
+        
+        history = [] # initialize array to hold positions over time
+
+        for i in range(frames):
+            self.choose_integrator() # apply integration method
+            history.append(self.positions.copy()) # save copy of currnet positions
+
+        return np.array(history)
+    
+    @classmethod
+    def load_data(cls, file_name, G = 1, softening = 0, dt = 0.1, integrator = "euler" ):
+        """
+        Create a simulation instance by loading particle data from a CSV file.
+
+        Parameters
+        ----------
+        file_name : string
+            Name  CSV file containing columns: mass, x, y, z, v_x, v_y, v_z.
+        G : float
+            Gravitational constant. 
+        softening : float, optional
+            Softening parameter. 
+        dt : float
+            Time step for the simulation.
+        integrator : string
+            Integration method to use (e.g., "euler", "rk4")
+
+        Returns
+        -------
+        NBodySimulation
+            A fully initialized simulation object.
+        """
+
+        df = pd.read_csv(file_name) # load data frame
+    
+        # Extract values as float arrays
+        masses = df["mass"].to_numpy(dtype=float)
+        positions = df[["x", "y", "z"]].to_numpy(dtype=float)
+        velocities = df[["v_x", "v_y", "v_z"]].to_numpy(dtype=float)
+
+        # Creat and initialize simulation
+        sim = cls(num_bodies = len(masses), G = G, softening = softening, dt = dt, integrator = integrator)
+        sim.set_initial_conditions(masses, positions, velocities) # set inital conditions
+
+        return sim
+
+# setup simulation
+sim = NBodySimulation.load_data("data1.csv", dt=0.01, integrator='euler')
+
+# Run simulation
+position_history = sim.run(frames=10)
+
+print(position_history)
