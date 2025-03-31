@@ -192,7 +192,7 @@ class NBodySimulation:
 sim = NBodySimulation.load_data("data1.csv", dt=0.01, integrator='euler')
 
 # Run simulation
-position_history = sim.run(frames=300)
+position_history = sim.run(frames=500)
 
 # setup plot
 fig = plt.figure()
@@ -222,7 +222,7 @@ def update(frame):
     ax.set_zlim(center_mass[2] - max_distance, center_mass[2] + max_distance)
 
     for i in range(num_bodies):
-        points[i].set_data(current_position[i, 0], current_position[i, 1])
+        points[i].set_data([current_position[i, 0]], [current_position[i, 1]])
         points[i].set_3d_properties(current_position[i, 2])
         tails[i].set_data(position_history[:frame, i, 0], position_history[:frame, i, 1])
         tails[i].set_3d_properties(position_history[:frame, i, 2])
@@ -232,4 +232,5 @@ def update(frame):
 
 # Run animation
 anim = FuncAnimation(fig, update, frames=len(position_history), interval=10)
-plt.show()
+
+anim.save('nbody_simulation.mp4', writer='ffmpeg')
