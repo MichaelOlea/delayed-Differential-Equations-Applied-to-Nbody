@@ -32,8 +32,7 @@ class NBodySimulation:
         self.integrator = integrator.lower() # covert to lower case
 
     
-        # Define the structured data tpye for each body
-        # Each body has mass and a 3D vector for position and velocity
+        # Define the structured data tpye for each body. Each body has mass and a 3D vector for position and velocity
         self.body_dtype = np.dtype([
             ('mass', float),
             ('position', float, (3,)),
@@ -74,31 +73,29 @@ class NBodySimulation:
         self.positions[:] = positions
         self.velocities[:] = velocities
 
-    def calculate_acceleration(self):
-        """
-        Compute the gravitational acceleration on each body due to all other bodies
-
-        Using Newtons law of universal gravitions with softening.
-
-        Returns
-        -------
-        np. ndarray
-            shape: (num_bodies, 3) 3D accelertaion vecotrs of bodies 
-        """
-        self.accelerations.fill(0.0) # reset fill with zeros
+    def calculate_acceleration(self, positions, velocities = None, time = None, full_derivative = False):
         
+        accelerations = np.zeros_like(positions) # make sure array is the same shape and filled with zeros
+
+        # calculate accelerations
         for i in range(self.num_bodies):
             for j in range(self.num_bodies):
-                if i != j: # skip since body can not act on itself
-                    vec = self.positions[j] - self.positions[i] # position vector
-                    dist_sqr = np.sum(vec**2) + self.softening**2 # distance squared
-                    inv_dist_cube = 1.0 / (dist_sqr * np.sqrt(dist_sqr)) # inverse distacne cubed aka 1/r^3
+                if i != j: # skip if index is the same
+                    r_ij = positions[j] - positions[i]
+                    dist_sqr = np.sum(r_ij**2) + self.softening**2
+                    inv_dist_cube = 1.0 / (dist_sqr * np.sqrt(dist_sqr))
+                    
+                    # acc = G*M/r^3
+                    accelerations[i] += self.G * self.masses[j] * r_ij * inv_dist_cube
 
-                    acc = self.G * self.masses[j] * vec * inv_dist_cube # acc = G*M/r^3
-                    self.accelerations[i] += acc
-
-        return self.accelerations
-    
+        # Return accelerations or accelerations and velocities
+        if full_derivative:
+            if velocities is None:
+                raise ValueError("Velocities need to be given for (blank) integrator")
+            return np.concatenate([velocities, accelerations])
+        else:
+            return accelerations
+        
     def euler(self):
         """
         performs one integration step using Eulers method
@@ -106,16 +103,21 @@ class NBodySimulation:
         Updates each body's velocity and position based on the current
         acceleration and time step.        
         """
+        # caculate accelerations
+        accelerations = self.calculate_acceleration(self.positions)
 
-        # update velocity aka v(t+dt) = v(t) + a(t) * dt
-        self.velocities += self.accelerations * self.dt
-        # update position aka x(t+dt) = x(t) + v(t) * dt
+        # Update velocities and positions
+        self.velocities += accelerations * self.dt
         self.positions += self.velocities * self.dt
 
-        # update values
+        # update array
         for i in range(self.num_bodies):
             self.bodies[i]['position'] = self.positions[i]
             self.bodies[i]['velocity'] = self.velocities[i]
+
+
+    def rung_kutta_4(self):
+        raise NotImplementedError("have not done this bit yet.")
     
     def choose_integrator(self):
         """
@@ -129,6 +131,7 @@ class NBodySimulation:
         
     def run(self, frames):
         """
+        update !!!!!!!!!!!!!!!!!!!!!!!!!!!!
         Run the simulations for a given number of frames
 
         Parameters
@@ -142,14 +145,18 @@ class NBodySimulation:
             Position history with shape (frames, num_bodies, 3),
             the positions of all bodies over time.
         """
+
+        history = []
         
-        history = [] # initialize array to hold positions over time
-
-        for i in range(frames):
-            self.choose_integrator() # apply integration method
-            history.append(self.positions.copy()) # save copy of currnet positions
-
-        return np.array(history)
+        if self.integrator == "euler":
+            for i in range(frames):
+                self.euler()
+                history.append(self.positions.copy())
+            return np.array(history)
+        elif self.integrator == "rk4":
+            raise NotImplementedError("have not done this bit yet.") 
+        else:
+            raise ValueError(f"Unkiwn integrator: {self.integrator}")
     
     @classmethod
     def load_data(cls, file_name, G = 1, softening = 0, dt = 0.1, integrator = "euler" ):
@@ -212,6 +219,10 @@ for tail in tails:
 
 # Animation update functions
 def update(frame):
+
+    print(f"\rrendering frame: {frame}", end="") # update which frame is being redered
+
+    # find center of system to center camera
     current_position = position_history[frame]
     center_mass = current_position.mean(axis = 0)
 
@@ -226,11 +237,9 @@ def update(frame):
         points[i].set_3d_properties(current_position[i, 2])
         tails[i].set_data(position_history[:frame, i, 0], position_history[:frame, i, 1])
         tails[i].set_3d_properties(position_history[:frame, i, 2])
-
     return points + tails
 
 
 # Run animation
 anim = FuncAnimation(fig, update, frames=len(position_history), interval=10)
-
 anim.save('nbody_simulation.mp4', writer='ffmpeg')
