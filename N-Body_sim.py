@@ -6,7 +6,23 @@ from mpl_toolkits.mplot3d.art3d import Line3D
 
 class NBodySimulation:
 
-    def __init__(self, num_bodies, G = 1 , softening = 0.1, dt = 0.1, integrator="euler", gravity_speed = float('inf')):
+    def __init__(self, num_bodies, G = 1 , softening = 0.1, dt = 0.1, integrator="euler"):
+        """
+        Initialize the N-body simulation.
+
+        Parameters
+        ----------
+        num_bodies : int
+        Number of bodies in the simulation.
+        G : float, optional
+        Gravitational constant. Default is 1.
+        softening : float, optional
+        Softening parameter to avoid division by zero at short distances. Default is 0.1.
+        dt : float, optional
+        Time step (delta t) for integration. Default is 0.1.
+        integrator : str, optional
+        Integration method to use (e.g., "euler", "rk4"). Default is "euler".
+        """
 
         # Store simulation parameters
         self.num_bodies = num_bodies
@@ -14,8 +30,6 @@ class NBodySimulation:
         self.softening = softening
         self.dt = dt
         self.integrator = integrator.lower() # covert to lower case
-        self.gravity_speed = gravity_speed
-        self.current_time = 0.0
 
     
         # Define the structured data tpye for each body. Each body has mass and a 3D vector for position and velocity
@@ -33,10 +47,20 @@ class NBodySimulation:
         self.positions = np.zeros((num_bodies, 3))
         self.velocities = np.zeros((num_bodies, 3))
         self.accelerations = np.zeros((num_bodies, 3))
-        self.position_history = []
-        self.time_history = []
 
     def set_initial_conditions(self, masses, positions, velocities):
+        """
+        Set initial conditions for simulation
+
+        parameters
+        ----------
+        masses: np.ndarray, shape (n,)
+            array of masses for each body
+        positions: np.ndarray, shape (n,)
+            initial 3D positions of each body
+        velocities: np.ndarray, shape (n,)
+            initial 3D velocities of each body
+        """
 
         # loop through each body and assign mass, posittion and velocity
         for  i in range(self.num_bodies):
@@ -48,59 +72,21 @@ class NBodySimulation:
         self.masses[:] = masses
         self.positions[:] = positions
         self.velocities[:] = velocities
-        self.position_history.append(positions.copy())
-        self.time_history.append(self.current_time)
-
-    def get_delayed_position(self, i_position, j, current_time):
-        # if gravity speed if infinite, no dealy
-        if np.isinf(self.gravity_speed):
-            r_ij = i_position - self.positions[j]
-            dist_sqr = np.sum(r_ij**2) + self.softening**2
-            inv_dist_cube = 1.0 / (dist_sqr * np.sqrt(dist_sqr))
-            return r_ij, inv_dist_cube
-        
-        # Find position based on speed of gravity
-        for fram_idx in range(len(self.time_history) -1, -1, -1):
-
-            # calc time delay
-            time_delay = current_time - self.time_history[fram_idx]
-
-            # get position
-            j_position = self.position_history[fram_idx][j]
-
-            # calc distnace
-            r_ij = i_position - j_position
-            dist_ij = np.sqrt(np.sum(r_ij**2) + self.softening**2)
-
-            # Check if correct frame
-            if time_delay >= dist_ij / self.gravity_speed:
-                inv_dist_cube = 1.0 / (dist_ij**3)
-                return r_ij, inv_dist_cube
-            
-        # if no suitbale time frame, ooooof
-        r_ij = i_position - self.position_history[0][j]
-        return r_ij, 0.0
-
 
     def calculate_acceleration(self, positions, velocities = None, time = None, full_derivative = False):
         
-        if positions is None:
-            positions = self.positions
-
-        if time is None:
-            time = self.current_time
-
         accelerations = np.zeros_like(positions) # make sure array is the same shape and filled with zeros
 
         # calculate accelerations
         for i in range(self.num_bodies):
             for j in range(self.num_bodies):
                 if i != j: # skip if index is the same
-                    
-                    r_ij, inv_dist_cube = self.get_delayed_position(positions[i], j, time)
+                    r_ij = positions[j] - positions[i]
+                    dist_sqr = np.sum(r_ij**2) + self.softening**2
+                    inv_dist_cube = 1.0 / (dist_sqr * np.sqrt(dist_sqr))
                     
                     # acc = G*M/r^3
-                    accelerations[i] += -self.G * self.masses[j] * r_ij * inv_dist_cube
+                    accelerations[i] += self.G * self.masses[j] * r_ij * inv_dist_cube
 
         # Return accelerations or accelerations and velocities
         if full_derivative:
@@ -123,16 +109,12 @@ class NBodySimulation:
         # Update velocities and positions
         self.velocities += accelerations * self.dt
         self.positions += self.velocities * self.dt
-        self.current_time += self.dt
 
         # update array
         for i in range(self.num_bodies):
             self.bodies[i]['position'] = self.positions[i]
             self.bodies[i]['velocity'] = self.velocities[i]
 
-        # add current position to history
-        self.position_history.append(self.positions.copy())
-        self.time_history.append(self.current_time)
 
     def rung_kutta_4(self):
         """"
@@ -165,15 +147,11 @@ class NBodySimulation:
         # update position and velocities
         self.positions += self.dt / 6.0 * (k1_vel + 2 * k2_vel + 2 * k3_vel + k4_vel)
         self.velocities += self.dt / 6.0 * (k1_acc + 2 * k2_acc + 2 * k3_acc + k4_acc)
-        self.current_time += self.dt
 
         # update bodies array
         for i in range(self.num_bodies):
             self.bodies[i]['position'] = self.positions[i]
             self.bodies[i]['velocity'] = self.velocities[i]
-
-        self.position_history.append(self.positions.copy())
-        self.time_history.append(self.current_time)
 
     def yoshida(self):
         """
@@ -211,15 +189,11 @@ class NBodySimulation:
         # update lass variables
         self.positions = positions
         self.velocities = velocities
-        self.current_time += self.dt
 
         # update bodies array
         for i in range(self.num_bodies):
             self.bodies[i]['position'] = self.positions[i]
             self.bodies[i]['velocity'] = self.velocities[i]
-
-        self.position_history.append(self.positions.copy())
-        self.time_history.append(self.current_time)
     
     def choose_integrator(self):
         """
@@ -235,25 +209,62 @@ class NBodySimulation:
             raise ValueError(f"Unknown integrator: {self.integrator}")
         
     def run(self, frames):
-        # Clear existing history and start fresh
-        self.position_history = [self.positions.copy()]
-        self.time_history = [self.current_time]
-        
-        # Add initial positions
+        """
+        update !!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        Run the simulations for a given number of frames
+
+        Parameters
+        ---------
+        frames: intger
+            Number of frames (time steps) to run simultion 
+
+        Returns
+        -------
+        np.ndarray
+            Position history with shape (frames, num_bodies, 3),
+            the positions of all bodies over time.
+        """
+
         history = []
-        history.append(self.positions.copy())
+        history.append(self.positions.copy()) # add initla positions 
         
         for i in range(frames):
-            # Use the choose_integrator method instead of if-else
-            self.choose_integrator()
+            if self.integrator == "euler":
+                self.euler()
+            elif self.integrator == "rk4":
+                self.rung_kutta_4()
+            elif self.integrator == "yoshida":
+                self.yoshida()
+            else:
+                raise ValueError(f"Unknown integrator: {self.integrator}")
             
-            # Record positions after integration step
             history.append(self.positions.copy())
 
         return np.array(history)
     
     @classmethod
-    def load_data(cls, file_name, G = 1, softening = 0, dt = 0.1, integrator = "euler", gravity_speed=float('inf')):
+    def load_data(cls, file_name, G = 1, softening = 0, dt = 0.1, integrator = "euler" ):
+        """
+        Create a simulation instance by loading particle data from a CSV file.
+
+        Parameters
+        ----------
+        file_name : string
+            Name  CSV file containing columns: mass, x, y, z, v_x, v_y, v_z.
+        G : float
+            Gravitational constant. 
+        softening : float, optional
+            Softening parameter. 
+        dt : float
+            Time step for the simulation.
+        integrator : string
+            Integration method to use (e.g., "euler", "rk4")
+
+        Returns
+        -------
+        NBodySimulation
+            A fully initialized simulation object.
+        """
 
         df = pd.read_csv(file_name) # load data frame
     
@@ -263,14 +274,13 @@ class NBodySimulation:
         velocities = df[["v_x", "v_y", "v_z"]].to_numpy(dtype=float)
 
         # Creat and initialize simulation
-        sim = cls(num_bodies=len(masses), G = G, softening = softening, dt = dt, integrator = integrator, gravity_speed = gravity_speed)
-
+        sim = cls(num_bodies = len(masses), G = G, softening = softening, dt = dt, integrator = integrator)
         sim.set_initial_conditions(masses, positions, velocities) # set inital conditions
 
         return sim
 
 # setup simulation
-sim = NBodySimulation.load_data("data1.csv", dt=0.01, integrator='euler')
+sim = NBodySimulation.load_data("data1.csv", dt=0.01, integrator='yoshida')
 
 # Run simulation
 position_history = sim.run(frames=500)
