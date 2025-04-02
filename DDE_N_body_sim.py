@@ -252,6 +252,35 @@ class NBodySimulation:
 
         return np.array(history)
     
+    def calculate_core_radius(positions, masses):
+        
+        # find center of mass
+        total_mass = np.sum(masses) # find total mass
+        center_of_mass = np.sum(positions * masses[:, np.newaxis], axis=0) / np.sum(masses) # find the center of mass
+        
+        # Disances form center of mass
+        reltive_positions = positions - center_of_mass # find distances from center of mass
+        distances = np.linalg.norm(reltive_positions, axis = 1) # store distanes in an array
+
+        # sort the bodies by distance
+        sorted_indices = np.argsort(distances) # sorted array 
+        sorted_distances = distances[sorted_indices] # array of distnaces closest from furthest
+        sorted_masses = masses[sorted_indices] # array of masses clsest to furthest
+
+        # cumulative mass as we move outward
+        cumulative_mass = np.cumsum(sorted_masses)
+
+        # distnace that encloses n% of the total mass
+        n_mass = 0.6 * total_mass
+        idx = np.searchsorted(cumulative_mass, n_mass) # first index that cummutuve mass >= n% of mass
+
+        # make sure index is not out of range
+        if idx >= len(sorted_distances):
+            idx = len(sorted_distances) - 1
+        core_radius = sorted_distances[idx]
+        
+        return center_of_mass, core_radius
+    
     @classmethod
     def load_data(cls, file_name, G = 1, softening = 0, dt = 0.1, integrator = "euler", gravity_speed=float('inf')):
 
@@ -294,23 +323,26 @@ for tail in tails:
 # Animation update functions
 def update(frame):
 
-    print(f"\rrendering frame: {frame}", end="") # update which frame is being redered
+    print(f"\rrendering frame: {frame}", end="") # show progress
 
-    # find center of system to center camera
+    # ge current position, get center of mass and core raduis
     current_position = position_history[frame]
-    center_mass = current_position.mean(axis = 0)
+    center_of_mass, core_radius = NBodySimulation.calculate_core_radius(current_position, sim.masses)
 
-    # Autoscale view
-    max_distance = np.max(np.linalg.norm(current_position - center_mass, axis = 1))
-    ax.set_xlim(center_mass[0] - max_distance, center_mass[0] + max_distance)
-    ax.set_ylim(center_mass[1] - max_distance, center_mass[1] + max_distance)
-    ax.set_zlim(center_mass[2] - max_distance, center_mass[2] + max_distance)
+    # set plot limits 
+    ax.set_xlim(center_of_mass[0] - core_radius, center_of_mass[0] + core_radius)
+    ax.set_ylim(center_of_mass[1] - core_radius, center_of_mass[1] + core_radius)
+    ax.set_zlim(center_of_mass[2] - core_radius, center_of_mass[2] + core_radius)
 
+    # update positions of points and tails
     for i in range(num_bodies):
         points[i].set_data([current_position[i, 0]], [current_position[i, 1]])
         points[i].set_3d_properties(current_position[i, 2])
+        
+        # The tail for the body (all previous frames)
         tails[i].set_data(position_history[:frame, i, 0], position_history[:frame, i, 1])
         tails[i].set_3d_properties(position_history[:frame, i, 2])
+
     return points + tails
 
 

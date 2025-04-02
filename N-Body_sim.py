@@ -314,7 +314,7 @@ class NBodySimulation:
 sim = NBodySimulation.load_data("data1.csv", dt=0.01, integrator='yoshida')
 
 # Run simulation
-position_history = sim.run(frames=6000)
+position_history = sim.run(frames=500)
 
 # setup plot
 fig = plt.figure()
