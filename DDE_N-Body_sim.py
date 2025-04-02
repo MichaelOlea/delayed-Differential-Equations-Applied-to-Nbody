@@ -1,5 +1,5 @@
 """
-N-Body Simulation using Euler, Runge-Kutta 4, and Yoshida Integrators
+Delayed Gravity N-Body Simulation using Euler, Runge-Kutta 4, and Yoshida Integrators
 ---------------------------------------------------------------------
 
 Author: Michael Gonzalez
