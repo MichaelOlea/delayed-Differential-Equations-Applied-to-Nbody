@@ -1,0 +1,59 @@
+import matplotlib.pyplot as plt
+from N_Body_sim import NBodySimulation
+from matplotlib.animation import FuncAnimation
+from mpl_toolkits.mplot3d.art3d import Line3D
+
+
+# Setup simulation
+sim = NBodySimulation.load_data("data1.csv", dt=0.01, integrator='yoshida')
+
+# Run simulation
+position_history = sim.run(frames=100)
+
+
+# Setup plot
+fig = plt.figure()
+ax = fig.add_subplot(111, projection = '3d')
+ax.set_box_aspect([1, 1, 1])
+
+# Setup colors
+num_bodies = position_history.shape[1]
+colors = ['red', 'green', 'blue', 'purple', 'orange', 'pink', 'cyan', 'magenta', 'lime', 'teal']
+colors = colors * ((num_bodies + len(colors) - 1) // len(colors))  # Repeat if not enough colors
+
+# Create scatter points and tails
+points = [ax.plot([], [], [], 'o', color = colors[i])[0] for i in range(num_bodies)]
+tails = [Line3D([], [], [], color = colors[i]) for i in range(num_bodies)]
+for tail in tails:
+    ax.add_line(tail)
+
+# Animation update functions
+def update(frame):
+
+    print(f"\rrendering frame: {frame}", end="") # show progress
+
+    # Get current position, center of mass and core radius
+    current_position = position_history[frame]
+    center_of_mass, core_radius = NBodySimulation.calculate_core_radius(current_position, sim.masses)
+
+    # Set plot limits 
+    ax.set_xlim(center_of_mass[0] - core_radius, center_of_mass[0] + core_radius)
+    ax.set_ylim(center_of_mass[1] - core_radius, center_of_mass[1] + core_radius)
+    ax.set_zlim(center_of_mass[2] - core_radius, center_of_mass[2] + core_radius)
+
+    # Update positions of points and tails
+    for i in range(num_bodies):
+        points[i].set_data([current_position[i, 0]], [current_position[i, 1]])
+        points[i].set_3d_properties(current_position[i, 2])
+        
+        # The tail for the body (all previous frames)
+        tails[i].set_data(position_history[:frame, i, 0], position_history[:frame, i, 1])
+        tails[i].set_3d_properties(position_history[:frame, i, 2])
+
+    return points + tails
+
+
+
+# Run animation if test to true
+anim = FuncAnimation(fig, update, frames=len(position_history), interval=10)
+anim.save('nbody_simulation.mp4', writer='ffmpeg')

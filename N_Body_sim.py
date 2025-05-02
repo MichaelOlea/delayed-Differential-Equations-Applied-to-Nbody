@@ -3,40 +3,33 @@ N-Body Simulation using Euler, Runge-Kutta 4, and Yoshida Integrators
 ---------------------------------------------------------------------
 
 Author: Michael Gonzalez
-Date: Apr-01-2025
+Date: May-01-2025
 
 Description:
     This script simulates an N-body gravitational system in 3D space. 
     It supports multiple integrators (Euler, RK4, Yoshida), calculates 
-    gravitational forces with softening, and visualizes the results with
-    a 3D animated plot using matplotlib.
+    gravitational forces with softening.
 
 Features:
     - Structured numpy array for body properties
     - Multiple integration methods
     - Core radius calculation based on mass distribution
     - Optional CSV input to load initial body conditions
-    - 3D animated visualization with colored trails
 
 Dependencies:
     - numpy
     - pandas
-    - matplotlib
 
 Usage:
     1. Create a CSV file (e.g., data1.csv) with the following columns:
         mass, x, y, z, v_x, v_y, v_z
-    2. Run the script. An animation will be saved as `nbody_simulation.mp4`.
 
     Special Note: This is an update simulation from a previous research project.  
 """
 
-
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-from mpl_toolkits.mplot3d.art3d import Line3D
+
 
 class NBodySimulation:
 
@@ -369,56 +362,3 @@ class NBodySimulation:
         sim.set_initial_conditions(masses, positions, velocities) # set inital conditions
 
         return sim
-
-# Setup simulation
-sim = NBodySimulation.load_data("data1.csv", dt=0.01, integrator='yoshida')
-
-# Run simulation
-position_history = sim.run(frames=500)
-
-# Setup plot
-fig = plt.figure()
-ax = fig.add_subplot(111, projection = '3d')
-ax.set_box_aspect([1, 1, 1])
-
-# Setup colors
-num_bodies = position_history.shape[1]
-colors = ['red', 'green', 'blue', 'purple', 'orange', 'pink', 'cyan', 'magenta', 'lime', 'teal']
-colors = colors * ((num_bodies + len(colors) - 1) // len(colors))  # Repeat if not enough colors
-
-# Create scatter points and tails
-points = [ax.plot([], [], [], 'o', color = colors[i])[0] for i in range(num_bodies)]
-tails = [Line3D([], [], [], color = colors[i]) for i in range(num_bodies)]
-for tail in tails:
-    ax.add_line(tail)
-
-# Animation update functions
-def update(frame):
-
-    print(f"\rrendering frame: {frame}", end="") # show progress
-
-    # Get current position, center of mass and core radius
-    current_position = position_history[frame]
-    center_of_mass, core_radius = NBodySimulation.calculate_core_radius(current_position, sim.masses)
-
-    # Set plot limits 
-    ax.set_xlim(center_of_mass[0] - core_radius, center_of_mass[0] + core_radius)
-    ax.set_ylim(center_of_mass[1] - core_radius, center_of_mass[1] + core_radius)
-    ax.set_zlim(center_of_mass[2] - core_radius, center_of_mass[2] + core_radius)
-
-    # Update positions of points and tails
-    for i in range(num_bodies):
-        points[i].set_data([current_position[i, 0]], [current_position[i, 1]])
-        points[i].set_3d_properties(current_position[i, 2])
-        
-        # The tail for the body (all previous frames)
-        tails[i].set_data(position_history[:frame, i, 0], position_history[:frame, i, 1])
-        tails[i].set_3d_properties(position_history[:frame, i, 2])
-
-    return points + tails
-
-
-
-# Run animation
-anim = FuncAnimation(fig, update, frames=len(position_history), interval=10)
-anim.save('nbody_simulation.mp4', writer='ffmpeg')
